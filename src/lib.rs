@@ -2,8 +2,13 @@ pub const PATH_MAX: usize = 1024;
 pub const IFNAMSIZ: usize = 16;
 pub const INET_ADDRSTRLEN: usize = 16;
 pub const PF_TABLE_NAME_SIZE: usize = 32;
-pub const DIOCRSETADDRS: usize = 3293594693;
-pub const DIOCRGETADDRS: usize = 3293594694;
+pub const DIOCRSETADDRS: u64 = 3293594693;
+pub const DIOCRGETADDRS: u64 = 3293594694;
+
+pub const PFR_ADDR_SIZE: usize = 52;
+pub const PFR_TABLE_SIZE: usize = 1064;
+pub const PFIOC_TABLE_SIZE: usize = 1104;
+
 use libc::{in_addr, in6_addr};
 use std::mem;
 
@@ -29,9 +34,9 @@ pub struct pfr_addr {
 
 impl pfr_addr {
     pub fn init() -> pfr_addr {
-        let buffer = [0u8; 52];
+        let buffer = [0u8; PFR_ADDR_SIZE];
         unsafe {
-            mem::transmute::<[u8; 52], pfr_addr>(buffer)
+            mem::transmute::<[u8; PFR_ADDR_SIZE], pfr_addr>(buffer)
         }
     }
 }
@@ -46,9 +51,9 @@ pub struct pfr_table {
 
 impl pfr_table {
     pub fn init() -> pfr_table {
-        let buffer = [0u8; 1064];
+        let buffer = [0u8; PFR_TABLE_SIZE];
         unsafe {
-            mem::transmute::<[u8; 1064], pfr_table>(buffer)
+            mem::transmute::<[u8; PFR_TABLE_SIZE], pfr_table>(buffer)
         }
     }
 }
@@ -56,7 +61,7 @@ impl pfr_table {
 #[repr(C)]
 pub struct pfioc_table {
     pub pfrio_table: pfr_table,
-    pub pfrio_buffer: *mut [pfr_addr],
+    pub pfrio_buffer: *mut pfr_addr,
     pub pfrio_esize: i32,
     pub pfrio_size: i32,
     pub pfrio_size2: i32,
@@ -69,9 +74,9 @@ pub struct pfioc_table {
 
 impl pfioc_table {
     pub fn init() -> pfioc_table {
-        let buffer = [0u8; 1112];
+        let buffer = [0u8; PFIOC_TABLE_SIZE];
         unsafe {
-            mem::transmute::<[u8; 1112], pfioc_table>(buffer)
+            mem::transmute::<[u8; PFIOC_TABLE_SIZE], pfioc_table>(buffer)
         }
     }
 }
