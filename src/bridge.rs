@@ -1,7 +1,6 @@
-use std::{fs, io, mem};
+use std::{fs, fmt, io, mem};
 use std::error::Error;
 use std::os::unix::io::IntoRawFd;
-use std::ffi::CString;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::convert::{From, Into};
 
@@ -18,6 +17,31 @@ pub const AF_INET6: u8 = 24;
 pub const PFR_ADDR_SIZE: usize = 52;
 pub const PFR_TABLE_SIZE: usize = 1064;
 pub const PFIOC_TABLE_SIZE: usize = 1104;
+
+#[derive(Debug)]
+pub enum PfError {
+    TableNameTooLong,
+    Other(String),
+}
+
+impl fmt::Display for PfError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TableNameTooLong => {
+                write!(
+                    f,
+                    "Table names must be under {} characters",
+                    PF_TABLE_NAME_SIZE,
+                )
+            },
+            PfError::Other(s) => {
+                write!(f, "{}", s)
+            },
+        }
+    }
+}
+
+impl Error for PfError {}
 
 extern "C" {
     fn strlcpy(dst: *mut u8, src: *const u8, dstsize: usize) -> usize;
@@ -47,6 +71,23 @@ pub struct pfr_addr {
     pub pad: [u8; 7],
 }
 
+impl fmt::Debug for pfr_addr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let addr: IpAddr = self.clone().into();
+        let ifname = String::from_utf8(self.pfra_ifname.to_vec()).unwrap();
+        f.debug_struct("pfr_addr")
+            .field("pfra_u", &addr)
+            .field("pfra_ifname", &ifname.trim_end_matches('\0'))
+            .field("pfra_weight", &self.pfra_weight)
+            .field("pfra_net", &self.pfra_net)
+            .field("pfra_not", &self.pfra_not)
+            .field("pfra_fback", &self.pfra_fback)
+            .field("pfra_type", &self.pfra_type)
+            .field("pad", &self.pad)
+            .finish()
+    }
+}
+
 impl pfr_addr {
     /// Creates an empty pfr_addr where every field is null
     pub fn init() -> pfr_addr {
@@ -66,7 +107,7 @@ impl Into<IpAddr> for pfr_addr {
             let v = unsafe { self.pfra_u._pfra_ip6addr };
             return IpAddr::V6(Ipv6Addr::from(u128::from_be_bytes(v)));
         } else {
-            panic!("Invalid Address Family")
+            panic!("Convert pfr_addr -> IpAddr: Invalid Address Family")
         }
     }
 }
@@ -97,6 +138,22 @@ pub struct pfr_table {
     pub pfrt_fback: u8,
 }
 
+impl fmt::Debug for pfr_table {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        assert!(self.pfrt_anchor[PATH_MAX - 1] == 0);
+        assert!(self.pfrt_name[PF_TABLE_NAME_SIZE - 1] == 0);
+        let name = String::from_utf8(self.pfrt_name.to_vec()).unwrap();
+        let anchor = String::from_utf8(self.pfrt_anchor.to_vec()).unwrap();
+
+        f.debug_struct("pfr_table")
+            .field("pfrt_anchor", &anchor.trim_end_matches('\0'))
+            .field("pfrt_name", &name.trim_end_matches('\0'))
+            .field("pfrt_flags", &self.pfrt_flags)
+            .field("pfrt_fback", &self.pfrt_fback)
+            .finish()
+    }
+}
+
 impl pfr_table {
     /// Creates an empty pfr_table where every field is null
     pub fn init() -> pfr_table {
@@ -106,17 +163,19 @@ impl pfr_table {
         }
     }
 
-    pub fn new(name: &str) -> pfr_table {
+    /// Creates a new pfr_table with a name
+    pub fn new(name: &str) -> Result<pfr_table, PfError> {
         let mut table = Self::init();
-        let name = CString::new(name).unwrap();
-        unsafe {
-            strlcpy(
-                table.pfrt_name.as_mut_ptr(), 
-                name.as_bytes().as_ptr(), 
-                PF_TABLE_NAME_SIZE
-            );
+
+        if name.len() >= PF_TABLE_NAME_SIZE {
+            return Err(PfError::TableNameTooLong);
         }
-        table
+
+        for i in 0..name.len() {
+            table.pfrt_name[i] = name.as_bytes()[i];
+        }
+
+        Ok(table)
     }
 }
 
@@ -133,6 +192,31 @@ pub struct pfioc_table {
     pub pfrio_nchange: i32,
     pub pfrio_flags: i32,
     pub pfrio_ticket: u32,
+}
+
+impl fmt::Debug for pfioc_table {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let addrs = unsafe {
+            Vec::from_raw_parts(
+                self.pfrio_buffer,
+                self.pfrio_size as usize,
+                self.pfrio_size as usize,
+            )
+        };
+                
+        f.debug_struct("pfioc_table")
+            .field("pfrio_table", &self.pfrio_table)
+            .field("pfrio_buffer", &addrs)
+            .field("pfrio_esize", &self.pfrio_esize)
+            .field("pfrio_size", &self.pfrio_size)
+            .field("pfrio_size2", &self.pfrio_size2)
+            .field("pfrio_nadd", &self.pfrio_nadd)
+            .field("pfrio_ndel", &self.pfrio_ndel)
+            .field("pfrio_nchange", &self.pfrio_nchange)
+            .field("pfrio_flags", &self.pfrio_flags)
+            .field("pfrio_ticket", &self.pfrio_ticket)
+            .finish()
+    }
 }
 
 impl pfioc_table {

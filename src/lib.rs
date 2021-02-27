@@ -17,7 +17,7 @@ impl PfTable {
 
     pub fn get_addrs(&self) -> Result<Vec<IpAddr>, Box<dyn Error>> {
         let mut io = pfioc_table::init();
-        io.pfrio_table = pfr_table::new(&self.name[..]);
+        io.pfrio_table = pfr_table::new(&self.name[..])?;
         io.pfrio_buffer = 0 as *mut _; // Actually unused for the first call
         io.pfrio_esize = PFR_ADDR_SIZE as i32;
         io.pfrio_size = 0; // Ask the kernel how many entries there are
@@ -27,12 +27,14 @@ impl PfTable {
         let mut addrs = vec![pfr_addr::init(); len as usize];
         io.pfrio_buffer = addrs.as_mut_ptr();
         io.fire(DIOCRGETADDRS)?;
-
+        
         let mut list: Vec<IpAddr> = vec![];
-        for addr in addrs {
+        for addr in addrs.clone() {
             let ip = addr.into();
             list.push(ip);
         }
+        
+        println!("{:?}", io);
 
         Ok(list)
     }
