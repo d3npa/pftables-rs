@@ -1,6 +1,9 @@
 use std::{fs, io, mem};
 use std::error::Error;
 use std::os::unix::io::IntoRawFd;
+use std::ffi::CString;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::convert::{From, Into};
 
 pub const PATH_MAX: usize = 1024;
 pub const IFNAMSIZ: usize = 16;
@@ -54,6 +57,37 @@ impl pfr_addr {
     }
 }
 
+impl Into<IpAddr> for pfr_addr {
+    fn into(self) -> IpAddr {
+        if self.pfra_af == AF_INET {
+            let v = unsafe { self.pfra_u._pfra_ip4addr };
+            return IpAddr::V4(Ipv4Addr::from(u32::from_be(v)));
+        } else if self.pfra_af == AF_INET6 {
+            let v = unsafe { self.pfra_u._pfra_ip6addr };
+            return IpAddr::V6(Ipv6Addr::from(u128::from_be_bytes(v)));
+        } else {
+            panic!("Invalid Address Family")
+        }
+    }
+}
+
+impl From<IpAddr> for pfr_addr {
+    fn from(ip: IpAddr) -> pfr_addr {
+        let mut addr = Self::init();
+        match ip {
+            IpAddr::V4(v) => {
+                addr.pfra_af = AF_INET;
+                addr.pfra_u._pfra_ip4addr = u32::to_le(v.into());
+            },
+            IpAddr::V6(v) => {
+                addr.pfra_af = AF_INET6;
+                addr.pfra_u._pfra_ip6addr = u128::from(v).to_be_bytes();
+            },
+        }
+        addr
+    }
+}
+
 #[repr(C)]
 #[derive(Clone)]
 pub struct pfr_table {
@@ -74,10 +108,11 @@ impl pfr_table {
 
     pub fn new(name: &str) -> pfr_table {
         let mut table = Self::init();
+        let name = CString::new(name).unwrap();
         unsafe {
             strlcpy(
                 table.pfrt_name.as_mut_ptr(), 
-                b"my_table\0".as_ptr(), 
+                name.as_bytes().as_ptr(), 
                 PF_TABLE_NAME_SIZE
             );
         }

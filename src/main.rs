@@ -3,8 +3,7 @@ use std::error::Error;
 use std::net::IpAddr::{V4, V6};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let table_name = "my_table";
-    let table = PfTable::new(table_name);
+    let table = PfTable::new("my_table");
     let addrs = table.get_addrs()?;
 
     for addr in addrs {
