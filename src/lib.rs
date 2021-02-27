@@ -5,20 +5,24 @@ pub const PF_TABLE_NAME_SIZE: usize = 32;
 pub const DIOCRSETADDRS: u64 = 3293594693;
 pub const DIOCRGETADDRS: u64 = 3293594694;
 
+pub const AF_INET: u8 = 2;
+pub const AF_INET6: u8 = 10;
+
 pub const PFR_ADDR_SIZE: usize = 52;
 pub const PFR_TABLE_SIZE: usize = 1064;
 pub const PFIOC_TABLE_SIZE: usize = 1104;
 
-use libc::{in_addr, in6_addr};
 use std::mem;
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub union pfr_addr_u {
-    pub _pfra_ip4addr: in_addr,
-    pub _pfra_ip6addr: in6_addr,
+    pub _pfra_ip4addr: u32,
+    pub _pfra_ip6addr: [u8; 16],
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct pfr_addr {
 	pub pfra_u: pfr_addr_u,
     pub pfra_ifname: [u8; IFNAMSIZ],
@@ -42,6 +46,7 @@ impl pfr_addr {
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct pfr_table {
     pub pfrt_anchor: [u8; PATH_MAX],
     pub pfrt_name: [u8; PF_TABLE_NAME_SIZE],
@@ -59,6 +64,7 @@ impl pfr_table {
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct pfioc_table {
     pub pfrio_table: pfr_table,
     pub pfrio_buffer: *mut pfr_addr,
