@@ -1,88 +1,49 @@
-pub const PATH_MAX: usize = 1024;
-pub const IFNAMSIZ: usize = 16;
-pub const INET_ADDRSTRLEN: usize = 16;
-pub const PF_TABLE_NAME_SIZE: usize = 32;
-pub const DIOCRSETADDRS: u64 = 3293594693;
-pub const DIOCRGETADDRS: u64 = 3293594694;
+pub mod bridge;
 
-pub const AF_INET: u8 = 2;
-pub const AF_INET6: u8 = 10;
+pub use bridge::*;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::error::Error;
 
-pub const PFR_ADDR_SIZE: usize = 52;
-pub const PFR_TABLE_SIZE: usize = 1064;
-pub const PFIOC_TABLE_SIZE: usize = 1104;
-
-use std::mem;
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union pfr_addr_u {
-    pub _pfra_ip4addr: u32,
-    pub _pfra_ip6addr: [u8; 16],
+#[derive(Debug)]
+pub struct PfTable {
+    name: String,
 }
 
-#[repr(C)]
-#[derive(Clone)]
-pub struct pfr_addr {
-	pub pfra_u: pfr_addr_u,
-    pub pfra_ifname: [u8; IFNAMSIZ],
-    pub pfra_states: u32,
-    pub pfra_weight: u16,
-    pub pfra_af: u8,
-    pub pfra_net: u8,
-    pub pfra_not: u8,
-    pub pfra_fback: u8,
-    pub pfra_type: u8,
-    pub pad: [u8; 7],
-}
-
-impl pfr_addr {
-    pub fn init() -> pfr_addr {
-        let buffer = [0u8; PFR_ADDR_SIZE];
-        unsafe {
-            mem::transmute::<[u8; PFR_ADDR_SIZE], pfr_addr>(buffer)
-        }
+impl PfTable {
+    pub fn new(name: &str) -> PfTable {
+        let name = String::from(name);
+        PfTable { name }
     }
-}
 
-#[repr(C)]
-#[derive(Clone)]
-pub struct pfr_table {
-    pub pfrt_anchor: [u8; PATH_MAX],
-    pub pfrt_name: [u8; PF_TABLE_NAME_SIZE],
-    pub pfrt_flags: u32,
-    pub pfrt_fback: u8,
-}
+    pub fn get_addrs(&self) -> Result<Vec<IpAddr>, Box<dyn Error>> {
+        let mut io = bridge::pfioc_table::init();
+        io.pfrio_table = bridge::pfr_table::new(&self.name[..]);
+        io.pfrio_buffer = 0 as *mut _; // Actually unused for the first call
+        io.pfrio_esize = bridge::PFR_ADDR_SIZE as i32;
+        io.pfrio_size = 0; // Ask the kernel how many entries there are
+        io.fire(bridge::DIOCRGETADDRS)?;
 
-impl pfr_table {
-    pub fn init() -> pfr_table {
-        let buffer = [0u8; PFR_TABLE_SIZE];
-        unsafe {
-            mem::transmute::<[u8; PFR_TABLE_SIZE], pfr_table>(buffer)
+        let len = io.pfrio_size;
+        let mut addrs = vec![bridge::pfr_addr::init(); len as usize];
+        io.pfrio_buffer = addrs.as_mut_ptr();
+        io.fire(bridge::DIOCRGETADDRS)?;
+
+        let mut list: Vec<IpAddr> = vec![];
+        for addr in addrs {
+            let family = addr.pfra_af;
+            if family == bridge::AF_INET {
+                let v = unsafe { addr.pfra_u._pfra_ip4addr };
+                let ip = IpAddr::V4(Ipv4Addr::from(u32::from_be(v)));
+                list.push(ip);
+            } else if family == bridge::AF_INET6 {
+                let v = unsafe { addr.pfra_u._pfra_ip6addr };
+                let ip = IpAddr::V6(Ipv6Addr::from(u128::from_be_bytes(v)));
+                list.push(ip);
+            } else {
+                eprintln!("Unknown family: {}", family);
+            }
         }
-    }
-}
 
-#[repr(C)]
-#[derive(Clone)]
-pub struct pfioc_table {
-    pub pfrio_table: pfr_table,
-    pub pfrio_buffer: *mut pfr_addr,
-    pub pfrio_esize: i32,
-    pub pfrio_size: i32,
-    pub pfrio_size2: i32,
-    pub pfrio_nadd: i32,
-    pub pfrio_ndel: i32,
-    pub pfrio_nchange: i32,
-    pub pfrio_flags: i32,
-    pub pfrio_ticket: u32,
-}
-
-impl pfioc_table {
-    pub fn init() -> pfioc_table {
-        let buffer = [0u8; PFIOC_TABLE_SIZE];
-        unsafe {
-            mem::transmute::<[u8; PFIOC_TABLE_SIZE], pfioc_table>(buffer)
-        }
+        Ok(list)
     }
 }
