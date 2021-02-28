@@ -2,7 +2,7 @@
 pub mod bindings;
 use bindings::*;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use std::convert::{TryFrom, Into};
+use std::convert::{TryFrom, TryInto};
 use crate::PfError;
 
 // Create more Rust-friendly (and safer) versions of the pf structs
@@ -49,8 +49,14 @@ impl TryFrom<pfr_addr> for PfAddr {
     }
 }
 
-impl Into<pfr_addr> for PfAddr {
-    fn into(self) -> pfr_addr {
+impl TryInto<pfr_addr> for PfAddr {
+    type Error = crate::PfError;
+    /// Will fail if ifname is 16 or greater
+    fn try_into(self) -> Result<pfr_addr, PfError> {
+        if self.ifname.len() >= IFNAMSIZ {
+            return Err(PfError::ConversionError);
+        }
+
         let mut c_addr = pfr_addr::init();
         c_addr.pfra_net = self.subnet;
         
@@ -65,6 +71,10 @@ impl Into<pfr_addr> for PfAddr {
             },
         };
 
-        c_addr
+        for i in 0..self.ifname.len() {
+            c_addr.pfra_ifname[i] = self.ifname.as_bytes()[i] as u8;
+        }
+
+        Ok(c_addr)
     }
 }
