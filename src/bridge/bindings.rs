@@ -1,3 +1,7 @@
+/// These structs are unsafe. 
+/// Particularly, PfiocTable contains a raw mutable pointer to an array or 
+/// vector which needs to be updated if said vector changes address (such 
+/// as when it grows)
 use std::mem;
 
 pub const PATH_MAX: usize = 1024;
