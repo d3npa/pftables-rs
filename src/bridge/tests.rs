@@ -99,7 +99,7 @@ fn convert_pfrtable_from_c_invalid_utf8() {
 
 #[test]
 fn convert_pfioctable_into_c() -> Result<(), Box<dyn Error>> {
-    let io = PfiocTable {
+    let io = PfIocTable {
         table: PfrTable {
             name: String::from("my_table"),
             anchor: String::from(""),
@@ -113,7 +113,7 @@ fn convert_pfioctable_into_c() -> Result<(), Box<dyn Error>> {
         ],
     };
 
-    let PfiocTableInter { io, addrs } = io.try_into()?;
+    let PfIocTableInter { io, addrs } = io.try_into()?;
 
     // addrs and addrs2 will be one and the same. Don't forget to 'forget'!
     let addrs2 = unsafe { slice::from_raw_parts(io.pfrio_buffer, addrs.len()) };
@@ -137,8 +137,8 @@ fn convert_pfioctable_from_c() -> Result<(), Box<dyn Error>> {
     io.pfrio_esize = PFR_ADDR_SIZE as i32;
     io.pfrio_size = addrs.len() as i32;
 
-    let inter = PfiocTableInter { io, addrs };
-    let _io: PfiocTable = inter.try_into()?;
+    let inter = PfIocTableInter { io, addrs };
+    let _io: PfIocTable = inter.try_into()?;
 
     Ok(())
 }

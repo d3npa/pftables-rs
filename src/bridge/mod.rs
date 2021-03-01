@@ -161,7 +161,7 @@ impl TryInto<pfr_table> for PfrTable {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct PfiocTable {
+pub struct PfIocTable {
     pub table: PfrTable,
     pub buffer: Vec<PfrAddr>,
     // pub esize: i32, // len of pfr_addr... maybe impl a get_size() on PfrAddr?
@@ -175,21 +175,28 @@ pub struct PfiocTable {
     // pub ticket: u32,
 }
 
-impl PfiocTable {
-    pub fn new() -> PfiocTable {
-        PfiocTable {
+impl PfIocTable {
+    pub fn new() -> PfIocTable {
+        PfIocTable {
             table: PfrTable::new(),
             buffer: Vec::new(),
         }
     }
+
+    // pub fn fire(&self, cmd: PfIocCommand) -> Result<(), PfError> {
+    //     let PfIocTableInter { mut io, addrs } = io.try_into()?;
+    //     unsafe { ioctl(fd, DIOCRGETADDRS, &mut io as *mut pfioc_table); }
+    //     let mut io = PfIocTable::try_from(PfIocTableInter { io, addrs })?;
+    //     Err(PfError::Unimplemented)
+    // }
 }
 
-impl TryFrom<PfiocTableInter> for PfiocTable {
+impl TryFrom<PfIocTableInter> for PfIocTable {
     type Error = crate::PfError;
 
     /// Will fail if PfrTable or PfrAddr conversions fail
-    fn try_from(io: PfiocTableInter) -> Result<PfiocTable, PfError> {
-        let PfiocTableInter { io, addrs } = io;
+    fn try_from(io: PfIocTableInter) -> Result<PfIocTable, PfError> {
+        let PfIocTableInter { io, addrs } = io;
 
         /* In some calls, such as DIOCRGETADDRS, the kernel returns the size 
         of the array before filling the array. Here we use that for the 
@@ -200,16 +207,16 @@ impl TryFrom<PfiocTableInter> for PfiocTable {
             addrs2.push(addr.try_into()?);
         }
 
-        Ok(PfiocTable {
+        Ok(PfIocTable {
             table: io.pfrio_table.try_into()?,
             buffer: addrs2,
         })
     }
 }
 
-impl TryInto<PfiocTableInter> for PfiocTable {
+impl TryInto<PfIocTableInter> for PfIocTable {
     type Error = crate::PfError;
-    fn try_into(self) -> Result<PfiocTableInter, PfError> {
+    fn try_into(self) -> Result<PfIocTableInter, PfError> {
         let mut addrs: Vec<pfr_addr> = Vec::new();
         for addr in self.buffer {
             addrs.push(addr.try_into()?);
@@ -221,12 +228,18 @@ impl TryInto<PfiocTableInter> for PfiocTable {
         io.pfrio_esize = PFR_ADDR_SIZE as i32;
         io.pfrio_size = addrs.len() as i32;
 
-        Ok(PfiocTableInter { io, addrs })
+        Ok(PfIocTableInter { io, addrs })
     }
 }
 
 /// Intermediate type to retain ownership of pfrio_buffer upon conversion to/from pfioc_table
-pub struct PfiocTableInter {
+pub struct PfIocTableInter {
     pub io: pfioc_table,
     pub addrs: Vec<pfr_addr>,
+}
+
+pub enum PfIocCommand {
+    IocrGetAddrs,
+    IocrAddAddrs,
+    IocrDelAddrs,
 }

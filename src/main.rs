@@ -12,17 +12,16 @@ extern "C" {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut io = PfiocTable::new();
+    let mut io = PfIocTable::new();
     io.table = PfrTable::new();
     io.table.name = String::from("my_table");
 
     let fd = fs::OpenOptions::new()
-        .read(true)
         .write(true)
         .open("/dev/pf")?
         .into_raw_fd();
 
-    let PfiocTableInter { mut io, addrs } = io.try_into()?;
+    let PfIocTableInter { mut io, addrs } = io.try_into()?;
 
     unsafe {
         ioctl(fd, DIOCRGETADDRS, &mut io as *mut pfioc_table);
@@ -30,19 +29,19 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("Reported size: {}", io.pfrio_size);
 
-    let mut io = PfiocTable::try_from(PfiocTableInter { io, addrs })?;
+    let mut io = PfIocTable::try_from(PfIocTableInter { io, addrs })?;
 
     for _ in 0..io.buffer.capacity() {
         io.buffer.push(PfrAddr::new());
     }
 
-    let PfiocTableInter { mut io, addrs } = io.try_into()?;
+    let PfIocTableInter { mut io, addrs } = io.try_into()?;
 
     unsafe {
         ioctl(fd, DIOCRGETADDRS, &mut io as *mut pfioc_table);
     }
 
-    let io = PfiocTable::try_from(PfiocTableInter { io, addrs })?;
+    let io = PfIocTable::try_from(PfIocTableInter { io, addrs })?;
     println!("{:?}", io);
 
     Ok(())
