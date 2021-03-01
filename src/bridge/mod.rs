@@ -191,7 +191,11 @@ impl TryFrom<PfiocTableInter> for PfiocTable {
     fn try_from(io: PfiocTableInter) -> Result<PfiocTable, PfError> {
         let PfiocTableInter { io, addrs } = io;
 
-        let mut addrs2: Vec<PfrAddr> = vec![];
+        /* In some calls, such as DIOCRGETADDRS, the kernel returns the size 
+        of the array before filling the array. Here we use that for the 
+        capacity so the address of the vector in Rust won't change as we push 
+        things later. */
+        let mut addrs2: Vec<PfrAddr> = Vec::with_capacity(io.pfrio_size as usize);
         for addr in addrs {
             addrs2.push(addr.try_into()?);
         }
@@ -206,7 +210,7 @@ impl TryFrom<PfiocTableInter> for PfiocTable {
 impl TryInto<PfiocTableInter> for PfiocTable {
     type Error = crate::PfError;
     fn try_into(self) -> Result<PfiocTableInter, PfError> {
-        let mut addrs: Vec<pfr_addr> = vec![];
+        let mut addrs: Vec<pfr_addr> = Vec::new();
         for addr in self.buffer {
             addrs.push(addr.try_into()?);
         }
