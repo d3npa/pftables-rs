@@ -14,6 +14,16 @@ pub struct PfrAddr {
     // Other fields are unused right now
 }
 
+impl PfrAddr {
+    pub fn new() -> PfrAddr {
+        PfrAddr {
+            addr: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            ifname: String::new(),
+            subnet: 32,
+        }
+    }
+}
+
 impl TryFrom<pfr_addr> for PfrAddr {
     type Error = crate::PfError;
     /// Will fail if pfra_af field is invalid or if pfra_ifname contains invalid utf8
@@ -89,6 +99,15 @@ pub struct PfrTable {
     // pub fback: u8,
 }
 
+impl PfrTable {
+    pub fn new() -> PfrTable {
+        PfrTable {
+            anchor: String::new(),
+            name: String::new(),
+        }
+    }
+}
+
 impl TryFrom<pfr_table> for PfrTable {
     type Error = crate::PfError;
     /// Will fail if pfrt_anchor or pfrt_name contain invalid utf8
@@ -154,6 +173,15 @@ pub struct PfiocTable {
     // pub changed: i32,
     // pub flags: i32,
     // pub ticket: u32,
+}
+
+impl PfiocTable {
+    pub fn new() -> PfiocTable {
+        PfiocTable {
+            table: PfrTable::new(),
+            buffer: Vec::new(),
+        }
+    }
 }
 
 impl TryFrom<PfiocTableInter> for PfiocTable {
