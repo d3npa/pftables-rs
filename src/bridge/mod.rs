@@ -1,11 +1,21 @@
+/// More Rust-friendly (and safer) versions of the pf structs
+/// The goal of these structs are that a library user would not need
+/// to use the original repr(C) structs directly unless they really wanted to.
 #[cfg(test)] mod tests;
 pub mod bindings;
 use bindings::*;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use std::convert::{TryFrom, TryInto};
+use std::cell::RefCell;
 use crate::PfError;
+use std::fmt;
 
-// Create more Rust-friendly (and safer) versions of the pf structs
+pub trait RusticBinding<T> {
+    /// Generates a repr(C) struct equivalent to the implementor
+    fn repr_c(self: &Self) -> Result<T, PfError>;
+    /// Consumes a repr(C) struct to update the implementor's internal values
+    fn sync_c(self: &mut Self, c: T) -> Result<(), PfError>;
+}
+
 #[derive(Debug, PartialEq)]
 pub struct PfrAddr {
     pub addr: IpAddr,
@@ -24,17 +34,17 @@ impl PfrAddr {
     }
 }
 
-impl TryFrom<pfr_addr> for PfrAddr {
-    type Error = crate::PfError;
-    /// Will fail if pfra_af field is invalid or if pfra_ifname contains invalid utf8
-    fn try_from(a: pfr_addr) -> Result<PfrAddr, PfError> {
-        let addr = match a.pfra_af {
+impl RusticBinding<pfr_addr> for PfrAddr {
+    /// Updates the values in this struct from a C struct
+    /// Will fail if addres family or ifname contain invalid data
+    fn sync_c(&mut self, c: pfr_addr) -> Result<(), PfError> {
+        let addr = match c.pfra_af {
             AF_INET => {
-                let v = unsafe { a.pfra_u._pfra_ip4addr };
+                let v = unsafe { c.pfra_u._pfra_ip4addr };
                 IpAddr::V4(Ipv4Addr::from(u32::from_be(v)))
             },
             AF_INET6 => {
-                let v = unsafe { a.pfra_u._pfra_ip6addr };
+                let v = unsafe { c.pfra_u._pfra_ip6addr };
                 IpAddr::V6(Ipv6Addr::from(u128::from_be_bytes(v)))
             },
             _ => {
@@ -42,7 +52,7 @@ impl TryFrom<pfr_addr> for PfrAddr {
             },
         };
 
-        let mut ifname = a.pfra_ifname.to_vec();
+        let mut ifname = c.pfra_ifname.to_vec();
         while ifname.len() > 0 && ifname[ifname.len() - 1] == 0 {
             ifname.pop();
         }
@@ -52,19 +62,18 @@ impl TryFrom<pfr_addr> for PfrAddr {
             Err(_) => return Err(PfError::ConversionError),
         };
 
-        Ok(PfrAddr {
-            addr,
-            ifname,
-            subnet: a.pfra_net,
-        })
-    }
-}
+        // No errors; Ok to update
+        self.addr = addr;
+        self.ifname = ifname;
+        self.subnet = c.pfra_net;
 
-impl TryInto<pfr_addr> for PfrAddr {
-    type Error = crate::PfError;
-    /// Will fail if ifname is IFNAMSIZ characters or longer
-    fn try_into(self) -> Result<pfr_addr, PfError> {
-        if self.ifname.len() >= IFNAMSIZ {
+        Ok(())
+    }
+    
+    /// Creates a C struct equivalent to this one
+    /// Fails if length of ifname is longer than or equal to IFNAMSIZ
+    fn repr_c(&self) -> Result<pfr_addr, PfError> {
+        if self.ifname.len() >= bindings::IFNAMSIZ {
             return Err(PfError::ConversionError);
         }
 
@@ -108,11 +117,10 @@ impl PfrTable {
     }
 }
 
-impl TryFrom<pfr_table> for PfrTable {
-    type Error = crate::PfError;
-    /// Will fail if pfrt_anchor or pfrt_name contain invalid utf8
-    fn try_from(t: pfr_table) -> Result<PfrTable, PfError> {
-        let mut anchor = t.pfrt_anchor.to_vec();
+impl RusticBinding<pfr_table> for PfrTable {
+    /// Fails if strings in C structure contain invalid UTF-8
+    fn sync_c(&mut self, c: pfr_table) -> Result<(), PfError> {
+        let mut anchor = c.pfrt_anchor.to_vec();
         while anchor.len() > 0 && anchor[anchor.len() - 1] == 0 {
             anchor.pop();
         }
@@ -122,7 +130,7 @@ impl TryFrom<pfr_table> for PfrTable {
             Err(_) => return Err(PfError::ConversionError),
         };
 
-        let mut name = t.pfrt_name.to_vec();
+        let mut name = c.pfrt_name.to_vec();
         while name.len() > 0 && name[name.len() - 1] == 0 {
             name.pop();
         }
@@ -132,26 +140,30 @@ impl TryFrom<pfr_table> for PfrTable {
             Err(_) => return Err(PfError::ConversionError),
         };
 
-        Ok(PfrTable { anchor, name })
-    }
-}
+        // No errors; Ok to update
+        self.anchor = anchor;
+        self.name = name;
 
-impl TryInto<pfr_table> for PfrTable {
-    type Error = crate::PfError;
-    /// Will fail if anchor is PATH_MAX or greater, of if name is PF_TABLE_NAME_SIZE or greater
-    fn try_into(self) -> Result<pfr_table, PfError> {
-        if self.anchor.len() >= PATH_MAX 
-            || self.name.len() >= PF_TABLE_NAME_SIZE 
+        Ok(())
+    }
+    
+    /// Fails if the length of anchor is equal to or greater than PATH_MAX,
+    /// or if the length of name is equal to or greater than PF_TABLE_NAME_SIZE
+    fn repr_c(&self) -> Result<pfr_table, PfError> {
+        if self.anchor.len() >= bindings::PATH_MAX 
+            || self.name.len() >= bindings::PF_TABLE_NAME_SIZE 
         {
             return Err(PfError::ConversionError);
         }
 
         let mut c_table = pfr_table::init();
 
+        // Copy bytes for the anchor path
         for i in 0..self.anchor.len() {
             c_table.pfrt_anchor[i] = self.anchor.as_bytes()[i];
         }
 
+        // Copy bytes for the table name
         for i in 0..self.name.len() {
             c_table.pfrt_name[i] = self.name.as_bytes()[i];
         }
@@ -160,10 +172,11 @@ impl TryInto<pfr_table> for PfrTable {
     }
 }
 
-#[derive(Debug, PartialEq)]
 pub struct PfIocTable {
     pub table: PfrTable,
     pub buffer: Vec<PfrAddr>,
+    pub size: usize,
+    pfrio_buffer: RefCell<Vec<bindings::pfr_addr>>,
     // pub esize: i32, // len of pfr_addr... maybe impl a get_size() on PfrAddr?
     // pub size: i32, // len of buffer can be infered
     // Below fields are currently unused
@@ -180,6 +193,8 @@ impl PfIocTable {
         PfIocTable {
             table: PfrTable::new(),
             buffer: Vec::new(),
+            size: 0,
+            pfrio_buffer: RefCell::new(vec![]),
         }
     }
 
@@ -191,51 +206,64 @@ impl PfIocTable {
     // }
 }
 
-impl TryFrom<PfIocTableInter> for PfIocTable {
-    type Error = crate::PfError;
-
+impl RusticBinding<pfioc_table> for PfIocTable {
     /// Will fail if PfrTable or PfrAddr conversions fail
-    fn try_from(io: PfIocTableInter) -> Result<PfIocTable, PfError> {
-        let PfIocTableInter { io, addrs } = io;
+    fn sync_c(&mut self, io: pfioc_table) -> Result<(), PfError> {
+        // replace table, replace buffer, replace size
+        self.table.sync_c(io.pfrio_table)?;
+        self.buffer.clear();
 
-        /* In some calls, such as DIOCRGETADDRS, the kernel returns the size 
-        of the array before filling the array. Here we use that for the 
-        capacity so the address of the vector in Rust won't change as we push 
-        things later. */
-        let mut addrs2: Vec<PfrAddr> = Vec::with_capacity(io.pfrio_size as usize);
-        for addr in addrs {
-            addrs2.push(addr.try_into()?);
+        // Update self.buffer from internal pfrio_buffer
+        let mut internal = self.pfrio_buffer.borrow_mut();
+        self.buffer.clear();
+
+        for _ in 0..internal.len() {
+            let addr = internal.pop().unwrap();
+            // This could be reduced by implementing TryInto
+            let mut addr2 = PfrAddr::new();
+            addr2.sync_c(addr)?;
+            self.buffer.push(addr2);
         }
 
-        Ok(PfIocTable {
-            table: io.pfrio_table.try_into()?,
-            buffer: addrs2,
-        })
-    }
-}
+        self.size = io.pfrio_size as usize;
 
-impl TryInto<PfIocTableInter> for PfIocTable {
-    type Error = crate::PfError;
-    fn try_into(self) -> Result<PfIocTableInter, PfError> {
-        let mut addrs: Vec<pfr_addr> = Vec::new();
-        for addr in self.buffer {
-            addrs.push(addr.try_into()?);
+        Ok(())
+    }
+
+    /// Note: ignores internal self.size value
+    fn repr_c(&self) -> Result<pfioc_table, PfError> {
+        // Update self.pfrio_buffer to match self.buffer
+        let mut internal = self.pfrio_buffer.borrow_mut();
+        internal.clear();
+        for addr in &self.buffer {
+            internal.push(addr.repr_c()?);
         }
 
         let mut io = pfioc_table::init();
-        io.pfrio_table = self.table.try_into()?;
-        io.pfrio_buffer = addrs.as_mut_ptr();
+        io.pfrio_table = self.table.repr_c()?;
+        io.pfrio_buffer = internal.as_mut_ptr();
         io.pfrio_esize = PFR_ADDR_SIZE as i32;
-        io.pfrio_size = addrs.len() as i32;
+        io.pfrio_size = internal.len() as i32;
 
-        Ok(PfIocTableInter { io, addrs })
+        Ok(io)
     }
 }
 
-/// Intermediate type to retain ownership of pfrio_buffer upon conversion to/from pfioc_table
-pub struct PfIocTableInter {
-    pub io: pfioc_table,
-    pub addrs: Vec<pfr_addr>,
+impl fmt::Debug for PfIocTable {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Skip non-Debug self.pfrio_buffer
+        f.debug_struct("PfIocTable")
+            .field("table", &self.table)
+            .field("buffer", &self.buffer)
+            .finish()
+    }
+}
+
+impl PartialEq for PfIocTable {
+    fn eq(&self, other: &Self) -> bool {
+        self.table == other.table
+        && self.buffer == other.buffer
+    }
 }
 
 pub enum PfIocCommand {
