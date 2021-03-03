@@ -178,6 +178,7 @@ pub struct PfIocTable {
     pub table: PfrTable,
     pub buffer: Vec<PfrAddr>,
     pub size: usize,
+    pub added: u32,
     pfrio_buffer: RefCell<Vec<bindings::pfr_addr>>,
     // pub esize: i32, // len of pfr_addr... maybe impl a get_size() on PfrAddr?
     // pub size: i32, // len of buffer can be infered
@@ -196,6 +197,7 @@ impl PfIocTable {
             table: PfrTable::new(),
             buffer: Vec::new(),
             size: 0,
+            added: 0,
             pfrio_buffer: RefCell::new(vec![]),
         }
     }
@@ -240,6 +242,7 @@ impl RusticBinding<pfioc_table> for PfIocTable {
         }
 
         self.size = io.pfrio_size as usize;
+        self.added = io.pfrio_nadd as u32;
 
         Ok(())
     }
@@ -282,14 +285,16 @@ impl PartialEq for PfIocTable {
 }
 
 pub enum PfIocCommand {
-    GetAddrs,
+    ClrAddrs,
     AddAddrs,
     DelAddrs,
+    GetAddrs,
 }
 
 impl PfIocCommand {
     fn code(&self) -> Result<u64, PfError> {
         match &self {
+            PfIocCommand::AddAddrs => Ok(bindings::DIOCRADDADDRS),
             PfIocCommand::GetAddrs => Ok(bindings::DIOCRGETADDRS),
             _ => { return Err(PfError::Unimplemented) },
         }

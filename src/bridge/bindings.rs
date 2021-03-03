@@ -8,6 +8,9 @@ pub const PATH_MAX: usize = 1024;
 pub const IFNAMSIZ: usize = 16;
 pub const INET_ADDRSTRLEN: usize = 16;
 pub const PF_TABLE_NAME_SIZE: usize = 32;
+pub const DIOCRCLRADDRS: u64 = 3293594690;
+pub const DIOCRADDADDRS: u64 = 3293594691;
+pub const DIOCRDELADDRS: u64 = 3293594692;
 pub const DIOCRSETADDRS: u64 = 3293594693;
 pub const DIOCRGETADDRS: u64 = 3293594694;
 
