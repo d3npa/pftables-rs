@@ -1,11 +1,6 @@
-#![allow(unused_imports)]
-use pf_rs::*;
-use pf_rs::bindings::*;
-use std::error::Error;
 use std::fs;
-use std::net::IpAddr::{V4, V6};
-use std::os::unix::io::IntoRawFd;
-use std::convert::{TryInto, TryFrom};
+use std::error::Error;
+use pf_rs::*;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let fd = fs::OpenOptions::new()
