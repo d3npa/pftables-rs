@@ -18,6 +18,10 @@ pub const PFR_ADDR_SIZE: usize = 52;
 pub const PFR_TABLE_SIZE: usize = 1064;
 pub const PFIOC_TABLE_SIZE: usize = 1104;
 
+extern "C" {
+    pub fn ioctl(d: i32, request: u64, ...) -> i32;
+}
+
 #[repr(C)]
 pub union pfr_addr_u {
     pub _pfra_ip4addr: u32,

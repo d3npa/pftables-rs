@@ -8,6 +8,8 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::cell::RefCell;
 use crate::PfError;
 use std::fmt;
+use std::os::unix::io::AsRawFd;
+use std::fs::File;
 
 pub trait RusticBinding<T> {
     /// Generates a repr(C) struct equivalent to the implementor
@@ -16,7 +18,7 @@ pub trait RusticBinding<T> {
     fn sync_c(self: &mut Self, c: T) -> Result<(), PfError>;
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PfrAddr {
     pub addr: IpAddr,
     pub ifname: String,
@@ -198,12 +200,24 @@ impl PfIocTable {
         }
     }
 
-    // pub fn fire(&self, cmd: PfIocCommand) -> Result<(), PfError> {
-    //     let PfIocTableInter { mut io, addrs } = io.try_into()?;
-    //     unsafe { ioctl(fd, DIOCRGETADDRS, &mut io as *mut pfioc_table); }
-    //     let mut io = PfIocTable::try_from(PfIocTableInter { io, addrs })?;
-    //     Err(PfError::Unimplemented)
-    // }
+    pub fn with_table(name: &str) -> PfIocTable {
+        let mut io = PfIocTable::new();
+
+        io.table = PfrTable {
+            anchor: String::new(),
+            name: String::from(name),
+        };
+
+        io
+    }
+
+    pub fn fire(&mut self, fd: &File, cmd: PfIocCommand) -> Result<(), PfError> {
+        let fd = fd.as_raw_fd();
+        let mut io = self.repr_c()?;
+        unsafe { ioctl(fd, cmd.code()?, &mut io as *mut pfioc_table); }
+        self.sync_c(io)?;
+        Ok(())
+    }
 }
 
 impl RusticBinding<pfioc_table> for PfIocTable {
@@ -214,9 +228,9 @@ impl RusticBinding<pfioc_table> for PfIocTable {
         self.buffer.clear();
 
         // Update self.buffer from internal pfrio_buffer
+        // We use pop() to take ownership of the value because pfr_addr is 
+        // not Copy.
         let mut internal = self.pfrio_buffer.borrow_mut();
-        self.buffer.clear();
-
         for _ in 0..internal.len() {
             let addr = internal.pop().unwrap();
             // This could be reduced by implementing TryInto
@@ -238,7 +252,7 @@ impl RusticBinding<pfioc_table> for PfIocTable {
         for addr in &self.buffer {
             internal.push(addr.repr_c()?);
         }
-
+        
         let mut io = pfioc_table::init();
         io.pfrio_table = self.table.repr_c()?;
         io.pfrio_buffer = internal.as_mut_ptr();
@@ -255,6 +269,7 @@ impl fmt::Debug for PfIocTable {
         f.debug_struct("PfIocTable")
             .field("table", &self.table)
             .field("buffer", &self.buffer)
+            .field("size", &self.size)
             .finish()
     }
 }
@@ -267,7 +282,16 @@ impl PartialEq for PfIocTable {
 }
 
 pub enum PfIocCommand {
-    IocrGetAddrs,
-    IocrAddAddrs,
-    IocrDelAddrs,
+    GetAddrs,
+    AddAddrs,
+    DelAddrs,
+}
+
+impl PfIocCommand {
+    fn code(&self) -> Result<u64, PfError> {
+        match &self {
+            PfIocCommand::GetAddrs => Ok(bindings::DIOCRGETADDRS),
+            _ => { return Err(PfError::Unimplemented) },
+        }
+    }
 }

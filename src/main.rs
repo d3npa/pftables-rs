@@ -2,47 +2,26 @@
 use pf_rs::*;
 use pf_rs::bindings::*;
 use std::error::Error;
-// use std::fs;
-// use std::net::IpAddr::{V4, V6};
-// use std::os::unix::io::IntoRawFd;
-// use std::convert::{TryInto, TryFrom};
-
-// extern "C" {
-//     fn ioctl(d: i32, request: u64, ...) -> i32;
-// }
+use std::fs;
+use std::net::IpAddr::{V4, V6};
+use std::os::unix::io::IntoRawFd;
+use std::convert::{TryInto, TryFrom};
 
 fn main() -> Result<(), Box<dyn Error>> {
-//     let mut io = PfIocTable::new();
-//     io.table = PfrTable::new();
-//     io.table.name = String::from("my_table");
+    let fd = fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/pf")?;
 
-//     let fd = fs::OpenOptions::new()
-//         .write(true)
-//         .open("/dev/pf")?
-//         .into_raw_fd();
+    // Prepare an Ioctl call
+    let mut io = PfIocTable::with_table("my_table");
 
-//     let PfIocTableInter { mut io, addrs } = io.try_into()?;
+    // Ask the kernel how many entries there are
+    io.fire(&fd, PfIocCommand::GetAddrs)?;
 
-//     unsafe {
-//         ioctl(fd, DIOCRGETADDRS, &mut io as *mut pfioc_table);
-//     }
+    // Allocate room for number of entries based on returned size
+    io.buffer = vec![PfrAddr::new(); io.size];
+    io.fire(&fd, PfIocCommand::GetAddrs)?;
 
-//     println!("Reported size: {}", io.pfrio_size);
-
-//     let mut io = PfIocTable::try_from(PfIocTableInter { io, addrs })?;
-
-//     for _ in 0..io.buffer.capacity() {
-//         io.buffer.push(PfrAddr::new());
-//     }
-
-//     let PfIocTableInter { mut io, addrs } = io.try_into()?;
-
-//     unsafe {
-//         ioctl(fd, DIOCRGETADDRS, &mut io as *mut pfioc_table);
-//     }
-
-//     let io = PfIocTable::try_from(PfIocTableInter { io, addrs })?;
-//     println!("{:?}", io);
-
+    println!("{:?}", io);
     Ok(())
 }
