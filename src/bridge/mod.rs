@@ -7,7 +7,7 @@ use bindings::*;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::cell::RefCell;
 use crate::PfError;
-use std::fmt;
+use std::{fmt, io};
 use std::os::unix::io::AsRawFd;
 use std::fs::File;
 
@@ -179,6 +179,7 @@ pub struct PfIocTable {
     pub buffer: Vec<PfrAddr>,
     pub size: usize,
     pub added: u32,
+    pub deleted: u32,
     pfrio_buffer: RefCell<Vec<bindings::pfr_addr>>,
     // pub esize: i32, // len of pfr_addr... maybe impl a get_size() on PfrAddr?
     // pub size: i32, // len of buffer can be infered
@@ -198,6 +199,7 @@ impl PfIocTable {
             buffer: Vec::new(),
             size: 0,
             added: 0,
+            deleted: 0,
             pfrio_buffer: RefCell::new(vec![]),
         }
     }
@@ -216,7 +218,14 @@ impl PfIocTable {
     pub fn fire(&mut self, fd: &File, cmd: PfIocCommand) -> Result<(), PfError> {
         let fd = fd.as_raw_fd();
         let mut io = self.repr_c()?;
-        unsafe { ioctl(fd, cmd.code()?, &mut io as *mut pfioc_table); }
+        let status = unsafe {
+            ioctl(fd, cmd.code()?, &mut io as *mut pfioc_table)
+        };
+
+        if status == -1 {
+            return Err(PfError::IoctlError(io::Error::last_os_error()));
+        }
+
         self.sync_c(io)?;
         Ok(())
     }
@@ -243,6 +252,7 @@ impl RusticBinding<pfioc_table> for PfIocTable {
 
         self.size = io.pfrio_size as usize;
         self.added = io.pfrio_nadd as u32;
+        self.deleted = io.pfrio_ndel as u32;
 
         Ok(())
     }
@@ -273,6 +283,8 @@ impl fmt::Debug for PfIocTable {
             .field("table", &self.table)
             .field("buffer", &self.buffer)
             .field("size", &self.size)
+            .field("added", &self.added)
+            .field("deleted", &self.deleted)
             .finish()
     }
 }
@@ -293,8 +305,11 @@ pub enum PfIocCommand {
 
 impl PfIocCommand {
     fn code(&self) -> Result<u64, PfError> {
+        #[allow(unreachable_pattern)]
         match &self {
+            // PfIocCommand::ClrAddrs => Ok(bindings::DIOCRCLRADDRS),
             PfIocCommand::AddAddrs => Ok(bindings::DIOCRADDADDRS),
+            PfIocCommand::DelAddrs => Ok(bindings::DIOCRDELADDRS),
             PfIocCommand::GetAddrs => Ok(bindings::DIOCRGETADDRS),
             _ => { return Err(PfError::Unimplemented) },
         }

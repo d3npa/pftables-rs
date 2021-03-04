@@ -1,6 +1,6 @@
 pub mod bridge;
 pub use bridge::*;
-use std::fmt;
+use std::{fmt, io};
 use std::error::Error;
 
 #[derive(Debug)]
@@ -8,6 +8,7 @@ pub enum PfError {
     ConversionError,
     UnknownAddressFamily,
     Unimplemented,
+    IoctlError(io::Error),
     Other(String),
 }
 
