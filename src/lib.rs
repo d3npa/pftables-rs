@@ -62,13 +62,13 @@ impl PfTable {
     /// Asks the kernel to populate the internal field `addrs`
     pub fn get_addrs(&mut self, fd: &fs::File) -> Result<()> {
         // Prepare an Ioctl call
-        let mut io = PfIocTable::with_table(&self.name);
+        let mut io = PfIocTable::new(&self.name);
 
         // Ask the kernel how many entries there are
         io.fire(&fd, PfIocCommand::GetAddrs)?;
 
         // Allocate room for number of entries based on returned size
-        io.buffer = vec![PfrAddr::new(); io.size];
+        io.buffer = vec![PfrAddr::default(); io.size()];
         io.fire(&fd, PfIocCommand::GetAddrs)?;
 
         self.addrs = io.buffer;
@@ -79,7 +79,7 @@ impl PfTable {
     pub fn add_addrs(&mut self, fd: &fs::File, addrs: Vec<PfrAddr>) 
         -> Result<()> 
     {
-        let mut io = PfIocTable::with_table(&self.name);
+        let mut io = PfIocTable::new(&self.name);
         io.buffer = addrs;
         io.fire(&fd, PfIocCommand::AddAddrs)?;
         self.get_addrs(fd)
@@ -89,7 +89,7 @@ impl PfTable {
     pub fn del_addrs(&mut self, fd: &fs::File, addrs: Vec<PfrAddr>) 
         -> Result<()> 
     {
-        let mut io = PfIocTable::with_table(&self.name);
+        let mut io = PfIocTable::new(&self.name);
         io.buffer = addrs;
         io.fire(&fd, PfIocCommand::DelAddrs)?;
         self.get_addrs(fd)
@@ -97,7 +97,7 @@ impl PfTable {
 
     /// Asks the kernel to remove every address from the table
     pub fn clr_addrs(&mut self, fd: &fs::File) -> Result<()> {
-        let mut io = PfIocTable::with_table(&self.name);
+        let mut io = PfIocTable::new(&self.name);
         io.fire(&fd, PfIocCommand::ClrAddrs)?;
         self.get_addrs(fd)
     }

@@ -31,21 +31,21 @@ pub struct PfrAddr {
 }
 
 impl PfrAddr {
-    /// Initializes a PfrAddr representing the host `127.0.0.1/32`
-    pub fn new() -> PfrAddr {
-        PfrAddr {
-            addr: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            ifname: String::new(),
-            subnet: 32,
-        }
-    }
-
     /// Constructs a `PfrAddr` from an IP and subnet
-    pub fn from_addr(addr: IpAddr, subnet: u8) -> PfrAddr {
+    pub fn new(addr: IpAddr, subnet: u8) -> PfrAddr {
         PfrAddr {
             addr,
             subnet,
             ifname: String::new(),
+        }
+    }
+
+    /// Constructs a `PfrAddr` with default values
+    pub fn default() -> PfrAddr {
+        PfrAddr {
+            addr: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            ifname: String::new(),
+            subnet: 32,
         }
     }
 }
@@ -124,8 +124,16 @@ pub struct PfrTable {
 }
 
 impl PfrTable {
+    /// Constructs a `PfrTable` with a given `name`
+    pub fn new(name: &str) -> PfrTable {
+        PfrTable {
+            anchor: String::new(),
+            name: String::from(name),
+        }
+    }
+
     /// Constructs a `PfrTable` with empty values
-    pub fn new() -> PfrTable {
+    pub fn default() -> PfrTable {
         PfrTable {
             anchor: String::new(),
             name: String::new(),
@@ -192,14 +200,15 @@ impl Translate<pfr_table> for PfrTable {
 pub struct PfIocTable {
     pub table: PfrTable,
     pub buffer: Vec<PfrAddr>,
-    pub size: usize,
-    pub added: u32,
-    pub deleted: u32,
     /// Internal buffer to preserve ownership while the kernel fills in values
     pfrio_buffer: RefCell<Vec<bindings::pfr_addr>>,
+    /// The following three fields are read-only. Use appropriate getters
+    size: usize,
+    added: u32,
+    deleted: u32,
+    // Below fields are currently unused
     // pub esize: i32, // len of pfr_addr... maybe impl a get_size() on PfrAddr?
     // pub size: i32, // len of buffer can be infered
-    // Below fields are currently unused
     // pub size2: i32,
     // pub added: i32,
     // pub deleted: i32,
@@ -209,28 +218,23 @@ pub struct PfIocTable {
 }
 
 impl PfIocTable {
+    /// Constructs a `PfIocTable` with a given `name`
+    pub fn new(name: &str) -> PfIocTable {
+        let mut io = PfIocTable::default();
+        io.table = PfrTable::new(name);
+        io
+    }
+
     /// Constructs a `PfIocTable` with empty values
-    pub fn new() -> PfIocTable {
+    pub fn default() -> PfIocTable {
         PfIocTable {
-            table: PfrTable::new(),
+            table: PfrTable::default(),
             buffer: Vec::new(),
+            pfrio_buffer: RefCell::new(vec![]),
             size: 0,
             added: 0,
             deleted: 0,
-            pfrio_buffer: RefCell::new(vec![]),
         }
-    }
-
-    /// Convenience function to prepare a `PfIocTable` with a `name`
-    pub fn with_table(name: &str) -> PfIocTable {
-        let mut io = PfIocTable::new();
-
-        io.table = PfrTable {
-            anchor: String::new(),
-            name: String::from(name),
-        };
-
-        io
     }
 
     /// Makes an `ioctl` system call on `fd` operating on this struct
@@ -255,35 +259,25 @@ impl PfIocTable {
         self.update(io)?;
         Ok(())
     }
+
+    /// Getter method for internal value `size`, set by the kernel
+    pub fn size(&self) -> usize {
+        self.size
+    }
+
+    /// Getter method for internal value `added`, set by the kernel
+    pub fn added(&self) -> u32 {
+        self.added
+    }
+
+    /// Getter method for internal value `deleted`, set by the kernel
+    pub fn deleted(&self) -> u32 {
+        self.deleted
+    }
 }
 
 impl Translate<pfioc_table> for PfIocTable {
-    /// Will fail if PfrTable or PfrAddr conversions fail
-    fn update(&mut self, io: pfioc_table) -> PfResult<()> {
-        // replace table, replace buffer, replace size
-        self.table.update(io.pfrio_table)?;
-        self.buffer.clear();
-
-        // Update self.buffer from internal pfrio_buffer
-        // We use remove(0) to take ownership of the value because pfr_addr is 
-        // not Copy.
-        let mut internal = self.pfrio_buffer.borrow_mut();
-        for _ in 0..internal.len() {
-            let addr = internal.remove(0);
-            // This could be reduced by implementing TryInto
-            let mut addr2 = PfrAddr::new();
-            addr2.update(addr)?;
-            self.buffer.push(addr2);
-        }
-
-        self.size = io.pfrio_size as usize;
-        self.added = io.pfrio_nadd as u32;
-        self.deleted = io.pfrio_ndel as u32;
-
-        Ok(())
-    }
-
-    /// Note: ignores internal self.size value
+    /// Will fail if `buffer` or `table` fail to translate
     fn translate(&self) -> PfResult<pfioc_table> {
         // Update self.pfrio_buffer to match self.buffer
         let mut internal = self.pfrio_buffer.borrow_mut();
@@ -299,11 +293,36 @@ impl Translate<pfioc_table> for PfIocTable {
 
         Ok(io)
     }
+
+    /// Will fail if `buffer` or `table` fail to update
+    fn update(&mut self, io: pfioc_table) -> PfResult<()> {
+        // replace table, replace buffer, replace size
+        self.table.update(io.pfrio_table)?;
+        self.buffer.clear();
+
+        // Update self.buffer from internal pfrio_buffer
+        // We use remove(0) to take ownership of the value because pfr_addr is 
+        // not Copy.
+        let mut internal = self.pfrio_buffer.borrow_mut();
+        for _ in 0..internal.len() {
+            let addr = internal.remove(0);
+            // This could be reduced by implementing TryInto
+            let mut addr2 = PfrAddr::default();
+            addr2.update(addr)?;
+            self.buffer.push(addr2);
+        }
+
+        self.size = io.pfrio_size as usize;
+        self.added = io.pfrio_nadd as u32;
+        self.deleted = io.pfrio_ndel as u32;
+
+        Ok(())
+    }
 }
 
 impl fmt::Debug for PfIocTable {
+    /// Skips non-Debug field `self.pfrio_buffer`
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // Skip non-Debug self.pfrio_buffer
         f.debug_struct("PfIocTable")
             .field("table", &self.table)
             .field("buffer", &self.buffer)

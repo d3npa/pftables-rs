@@ -9,10 +9,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         .open("/dev/pf")?;
 
     let mut addrs = vec![
-        PfrAddr::from_addr(IpAddr::V4("127.0.0.1".parse()?), 32),
-        PfrAddr::from_addr(IpAddr::V4("127.0.0.2".parse()?), 32),
-        PfrAddr::from_addr(IpAddr::V4("127.0.0.3".parse()?), 32),
-        PfrAddr::from_addr(IpAddr::V6("::1".parse()?), 128),
+        PfrAddr::new(IpAddr::V4("127.0.0.1".parse()?), 32),
+        PfrAddr::new(IpAddr::V4("127.0.0.2".parse()?), 32),
+        PfrAddr::new(IpAddr::V4("127.0.0.3".parse()?), 32),
+        PfrAddr::new(IpAddr::V6("::1".parse()?), 128),
     ];
 
     let mut table = PfTable::new("my_table");
