@@ -1,11 +1,7 @@
 use std::fs;
 use std::error::Error;
 use std::net::IpAddr;
-use pf_rs::*;
-
-static GREEN: &str = "\x1b[92m";
-static RESET: &str = "\x1b[0m";
-
+use pftables_rs::*;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let fd = fs::OpenOptions::new()
@@ -25,7 +21,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     table.add_addrs(&fd, addrs.clone())?;
 
     // Delete a list of addresses from table
-    let last = addrs.pop().unwrap()
+    let last = addrs.pop().unwrap();
     table.del_addrs(&fd, vec![last])?;
 
     // Print contents of table
