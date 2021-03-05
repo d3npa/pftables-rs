@@ -1,49 +1,10 @@
 use std::fs;
 use std::error::Error;
 use std::net::IpAddr;
-use std::convert::{From, Into};
 use pf_rs::*;
 
-#[derive(Debug, Clone)]
-/// Represents an Ip Address with a cidr
-struct IpAddress {
-    addr: IpAddr,
-    cidr: u8,
-}
-
-impl IpAddress {
-    pub fn ipv4(addr: &str, cidr: u8) -> Result<IpAddress, Box<dyn Error>> {
-        let addr = IpAddr::V4(addr.parse()?);
-        Ok(IpAddress { addr, cidr })
-    }
-
-    pub fn ipv6(addr: &str, cidr: u8) -> Result<IpAddress, Box<dyn Error>> {
-        let addr = IpAddr::V6(addr.parse()?);
-        Ok(IpAddress { addr, cidr })
-    }
-}
-
-impl From<PfrAddr> for IpAddress {
-    fn from(a: PfrAddr) -> IpAddress {
-        IpAddress { 
-            addr: a.addr,
-            cidr: a.subnet
-        }
-    }
-}
-
-impl Into<PfrAddr> for IpAddress {
-    fn into(self) -> PfrAddr {
-        PfrAddr { 
-            addr: self.addr,
-            subnet: self.cidr,
-            ifname: String::new(),
-        }
-    }
-}
-
 fn get_addrs(fd: &fs::File, table_name: &str)
-    -> Result<Vec<IpAddress>, Box<dyn Error>> 
+    -> Result<Vec<PfrAddr>, Box<dyn Error>> 
 {
     // Prepare an Ioctl call
     let mut io = PfIocTable::with_table(table_name);
@@ -55,21 +16,12 @@ fn get_addrs(fd: &fs::File, table_name: &str)
     io.buffer = vec![PfrAddr::new(); io.size];
     io.fire(&fd, PfIocCommand::GetAddrs)?;
 
-    // Extract addresses
-    let addrs = io.buffer.into_iter()
-        .map(move |x| x.into())
-        .collect();
-    
-    Ok(addrs)
+    Ok(io.buffer)
 }
 
-fn add_addrs(fd: &fs::File, table_name: &str, addrs: Vec<IpAddress>)
+fn add_addrs(fd: &fs::File, table_name: &str, addrs: Vec<PfrAddr>)
     -> Result<u32, Box<dyn Error>>
-{
-    let addrs: Vec<PfrAddr> = addrs.into_iter()
-        .map(move |x| x.into())
-        .collect();
-    
+{    
     let mut io = PfIocTable::with_table(table_name);
     io.buffer = addrs;
     io.fire(&fd, PfIocCommand::AddAddrs)?;
@@ -77,7 +29,7 @@ fn add_addrs(fd: &fs::File, table_name: &str, addrs: Vec<IpAddress>)
     Ok(io.added)
 }
 
-fn del_addrs(fd: &fs::File, table_name: &str, addrs: Vec<IpAddress>)
+fn del_addrs(fd: &fs::File, table_name: &str, addrs: Vec<PfrAddr>)
     -> Result<u32, Box<dyn Error>>
 {
     let addrs = addrs.into_iter()
@@ -106,10 +58,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         .open("/dev/pf")?;
 
     let mut addrs = vec![
-        IpAddress::ipv4("127.0.0.1", 32)?,
-        IpAddress::ipv4("127.0.0.2", 32)?,
-        IpAddress::ipv4("127.0.0.3", 32)?,
-        IpAddress::ipv6("::1", 128)?,
+        PfrAddr::from_addr(IpAddr::V4("127.0.0.1".parse()?), 32),
+        PfrAddr::from_addr(IpAddr::V4("127.0.0.2".parse()?), 32),
+        PfrAddr::from_addr(IpAddr::V4("127.0.0.3".parse()?), 32),
+        PfrAddr::from_addr(IpAddr::V6("::1".parse()?), 128),
     ];
         
     // Add addresses

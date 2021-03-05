@@ -34,6 +34,14 @@ impl PfrAddr {
             subnet: 32,
         }
     }
+
+    pub fn from_addr(addr: IpAddr, subnet: u8) -> PfrAddr {
+        PfrAddr {
+            addr,
+            subnet,
+            ifname: String::new(),
+        }
+    }
 }
 
 impl RusticBinding<pfr_addr> for PfrAddr {
