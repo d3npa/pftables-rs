@@ -218,6 +218,13 @@ impl PfIocTable {
     pub fn fire(&mut self, fd: &File, cmd: PfIocCommand) -> Result<(), PfError> {
         let fd = fd.as_raw_fd();
         let mut io = self.repr_c()?;
+
+        use PfIocCommand::*;
+        // It seems only commands that use the buffer are allowed to set esize
+        if let AddAddrs | DelAddrs | GetAddrs = cmd {
+            io.pfrio_esize = std::mem::size_of::<pfr_addr>() as i32;
+        }
+
         let status = unsafe {
             ioctl(fd, cmd.code()?, &mut io as *mut pfioc_table)
         };
@@ -241,6 +248,7 @@ impl RusticBinding<pfioc_table> for PfIocTable {
         // Update self.buffer from internal pfrio_buffer
         // We use pop() to take ownership of the value because pfr_addr is 
         // not Copy.
+        // BUG: This reverses the order of addresses!!
         let mut internal = self.pfrio_buffer.borrow_mut();
         for _ in 0..internal.len() {
             let addr = internal.pop().unwrap();
@@ -265,11 +273,10 @@ impl RusticBinding<pfioc_table> for PfIocTable {
         for addr in &self.buffer {
             internal.push(addr.repr_c()?);
         }
-        
+
         let mut io = pfioc_table::init();
         io.pfrio_table = self.table.repr_c()?;
         io.pfrio_buffer = internal.as_mut_ptr();
-        io.pfrio_esize = PFR_ADDR_SIZE as i32;
         io.pfrio_size = internal.len() as i32;
 
         Ok(io)
@@ -305,9 +312,9 @@ pub enum PfIocCommand {
 
 impl PfIocCommand {
     fn code(&self) -> Result<u64, PfError> {
-        #[allow(unreachable_pattern)]
+        #[allow(unreachable_patterns)]
         match &self {
-            // PfIocCommand::ClrAddrs => Ok(bindings::DIOCRCLRADDRS),
+            PfIocCommand::ClrAddrs => Ok(bindings::DIOCRCLRADDRS),
             PfIocCommand::AddAddrs => Ok(bindings::DIOCRADDADDRS),
             PfIocCommand::DelAddrs => Ok(bindings::DIOCRDELADDRS),
             PfIocCommand::GetAddrs => Ok(bindings::DIOCRGETADDRS),

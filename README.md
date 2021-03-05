@@ -10,7 +10,7 @@ Currently, it supports the following operations:
 - [x] Add Addresses in table
 - [x] Del Addresses in table
 - [x] Get Addresses in table
-- [ ] Clear Addresses in table
+- [x] Clear Addresses in table
 - [ ] Set Addresses in table
 - [ ] Create new table
 - [ ] Delete table

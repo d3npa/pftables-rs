@@ -1,10 +1,49 @@
 use std::fs;
 use std::error::Error;
 use std::net::IpAddr;
+use std::convert::{From, Into};
 use pf_rs::*;
 
+#[derive(Debug, Clone)]
+/// Represents an Ip Address with a cidr
+struct IpAddress {
+    addr: IpAddr,
+    cidr: u8,
+}
+
+impl IpAddress {
+    pub fn ipv4(addr: &str, cidr: u8) -> Result<IpAddress, Box<dyn Error>> {
+        let addr = IpAddr::V4(addr.parse()?);
+        Ok(IpAddress { addr, cidr })
+    }
+
+    pub fn ipv6(addr: &str, cidr: u8) -> Result<IpAddress, Box<dyn Error>> {
+        let addr = IpAddr::V6(addr.parse()?);
+        Ok(IpAddress { addr, cidr })
+    }
+}
+
+impl From<PfrAddr> for IpAddress {
+    fn from(a: PfrAddr) -> IpAddress {
+        IpAddress { 
+            addr: a.addr,
+            cidr: a.subnet
+        }
+    }
+}
+
+impl Into<PfrAddr> for IpAddress {
+    fn into(self) -> PfrAddr {
+        PfrAddr { 
+            addr: self.addr,
+            subnet: self.cidr,
+            ifname: String::new(),
+        }
+    }
+}
+
 fn get_addrs(fd: &fs::File, table_name: &str)
-    -> Result<Vec<IpAddr>, Box<dyn Error>> 
+    -> Result<Vec<IpAddress>, Box<dyn Error>> 
 {
     // Prepare an Ioctl call
     let mut io = PfIocTable::with_table(table_name);
@@ -17,21 +56,19 @@ fn get_addrs(fd: &fs::File, table_name: &str)
     io.fire(&fd, PfIocCommand::GetAddrs)?;
 
     // Extract addresses
-    let addrs = io.buffer.iter()
-        .map(|x| x.addr)
+    let addrs = io.buffer.into_iter()
+        .map(move |x| x.into())
         .collect();
     
     Ok(addrs)
 }
 
-fn add_addrs(fd: &fs::File, table_name: &str, addrs: Vec<IpAddr>)
+fn add_addrs(fd: &fs::File, table_name: &str, addrs: Vec<IpAddress>)
     -> Result<u32, Box<dyn Error>>
 {
-    let addrs = addrs.into_iter().map(move |x| {
-            let mut a = PfrAddr::new();
-            a.addr = x;
-            a
-        }).collect();
+    let addrs: Vec<PfrAddr> = addrs.into_iter()
+        .map(move |x| x.into())
+        .collect();
     
     let mut io = PfIocTable::with_table(table_name);
     io.buffer = addrs;
@@ -40,14 +77,12 @@ fn add_addrs(fd: &fs::File, table_name: &str, addrs: Vec<IpAddr>)
     Ok(io.added)
 }
 
-fn del_addrs(fd: &fs::File, table_name: &str, addrs: Vec<IpAddr>)
+fn del_addrs(fd: &fs::File, table_name: &str, addrs: Vec<IpAddress>)
     -> Result<u32, Box<dyn Error>>
 {
-    let addrs = addrs.into_iter().map(move |x| {
-            let mut a = PfrAddr::new();
-            a.addr = x;
-            a
-        }).collect();
+    let addrs = addrs.into_iter()
+        .map(move |x| x.into())
+        .collect();
     
     let mut io = PfIocTable::with_table(table_name);
     io.buffer = addrs;
@@ -70,9 +105,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         .write(true)
         .open("/dev/pf")?;
 
-    let addrs = vec![
-        IpAddr::V4("10.0.0.2".parse()?)
-        ];
+    let mut addrs = vec![
+        IpAddress::ipv4("127.0.0.1", 32)?,
+        IpAddress::ipv4("127.0.0.2", 32)?,
+        IpAddress::ipv4("127.0.0.3", 32)?,
+        IpAddress::ipv6("::1", 128)?,
+    ];
         
     // Add addresses
     let added = add_addrs(&fd, "my_table", addrs.clone())?;
@@ -81,7 +119,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Get addresses
     println!("{:?}", get_addrs(&fd, "my_table")?);
 
-    // Del addresses
+    // Del some of the addresses
+    addrs.pop();
     let deleted = del_addrs(&fd, "my_table", addrs.clone())?;
     println!("Deleted: {}", deleted);
 
@@ -91,16 +130,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Clear addresses
     let cleared = clr_addrs(&fd, "my_table")?;
     println!("Cleared: {}", cleared);
-    /*  
-        check /dev/pf kernel src to try and see why ioctl is failing
-        could it be another field in pfioc_table?
-            97310 pf-rs    CALL  ioctl(3,3293594690,140187732460992)
-            97310 pf-rs    RET   ioctl -1 errno 19
-        for comparison, pfctl does:
-            61064 pfctl    CALL  ioctl(3,3293594690,140187732341936)
-            61064 pfctl    RET   ioctl 0
-        which is the same. o-o
-    */
+
+    // Get addresses
+    println!("{:?}", get_addrs(&fd, "my_table")?);
 
     Ok(())
 }
