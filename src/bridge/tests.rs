@@ -10,13 +10,13 @@ fn test_pfioc_table() -> Result<(), Box<dyn Error>> {
 
     io.buffer.push(PfrAddr::new());
 
-    let mut io_c = io.repr_c()?;
+    let mut io_c = io.translate()?;
     assert_eq!(io_c.pfrio_size, 1);
 
     // Simulate kernel interaction
     io_c.pfrio_size = 2;
 
-    io.sync_c(io_c)?;
+    io.update(io_c)?;
     assert_eq!(io.size, 2);
     
     Ok(())

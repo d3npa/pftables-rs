@@ -1,7 +1,6 @@
-/// These structs are unsafe. 
-/// Particularly, PfIocTable contains a raw mutable pointer to an array or 
-/// vector which needs to be updated if said vector changes address (such 
-/// as when it grows)
+//! Bindings to structs and constants used by OpenBSD's pf.
+//! These bindings depend on unsafe features, including unions and 
+//! raw pointers; Rust-friendly wrappers are provided in the bridge module. 
 use std::mem;
 
 pub const PATH_MAX: usize = 1024;
