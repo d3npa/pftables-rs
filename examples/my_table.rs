@@ -21,26 +21,17 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut table = PfTable::new("my_table");
 
-    println!("{}Adding {} address{} to {}{}", 
-        GREEN, 
-        addrs.len(), 
-        if addrs.len() == 1 { "" } else { "es" }, 
-        table.name, 
-        RESET);
+    // Add a list of addresses to table
     table.add_addrs(&fd, addrs.clone())?;
+
+    // Delete a list of addresses from table
+    let last = addrs.pop().unwrap()
+    table.del_addrs(&fd, vec![last])?;
+
+    // Print contents of table
     println!("{}", table);
 
-    let delete = vec![addrs.pop().unwrap()];
-    println!("{}Deleting {} address{} from {}{}", 
-        GREEN, 
-        delete.len(), 
-        if delete.len() == 1 { "" } else { "es" }, 
-        table.name, 
-        RESET);
-    table.del_addrs(&fd, delete)?;
-    println!("{}", table);
-
-    println!("{}Clearing {}{}", GREEN, table.name, RESET);
+    // Clear all addresses from table
     table.clr_addrs(&fd)?;
 
     Ok(())
