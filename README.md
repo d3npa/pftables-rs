@@ -1,16 +1,18 @@
-# pf-rs
-Rust library for interacting with /dev/pf on OpenBSD
+# pftable-rs
+A small Rust library for managing pf tables on OpenBSD.
 
-I wrote this library because I needed it for a personal project. 
+Note: I haven't tested it but it may work on other BSDs and macOS as well.
 
-It mainly operates on pf tables, and doesn't have anything to work with rules or anchors. I'm not sure whether or not I'll implement those in the future; all the code is written by hand in a kind of unscalable way. Supporting all of /dev/pf's functionality would take more time than I'm willing to invest right now.
+This was primarily a learning exercise for me. I wanted to manage my pf tables from a [rocket.rs](https://rocket.rs) application, and didn't want to just proxy to `pfctl`. Instead this library talks directly to `/dev/pf`, the kernel device that controls pf (see `man 4 pf` for more info).
 
-Currently, it supports the following operations:
+I'm not currently planning on supporting operations on rules or anchors. I wrote all of the code by hand and it's incredibly time consuming to create working wrappers for all the structures the kernel is expecting. 
+
+Currently, this library supports the following operations:
 
 - [x] Add Addresses in table
 - [x] Del Addresses in table
 - [x] Get Addresses in table
 - [x] Clear Addresses in table
 - [ ] Set Addresses in table
-- [ ] Create new table
-- [ ] Delete table
+
+See `examples/my_table` for some sample high-level usage. `src/lib.rs` contains a `PfTable` struct which works the mid-level logic, which will be useful if you want to do more than what `PfTable` provides. `src/bridge/mod.rs` contains the majority of the ffi code.
