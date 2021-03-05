@@ -3,54 +3,9 @@ use std::error::Error;
 use std::net::IpAddr;
 use pf_rs::*;
 
-fn get_addrs(fd: &fs::File, table_name: &str)
-    -> Result<Vec<PfrAddr>, Box<dyn Error>> 
-{
-    // Prepare an Ioctl call
-    let mut io = PfIocTable::with_table(table_name);
+static GREEN: &str = "\x1b[92m";
+static RESET: &str = "\x1b[0m";
 
-    // Ask the kernel how many entries there are
-    io.fire(&fd, PfIocCommand::GetAddrs)?;
-
-    // Allocate room for number of entries based on returned size
-    io.buffer = vec![PfrAddr::new(); io.size];
-    io.fire(&fd, PfIocCommand::GetAddrs)?;
-
-    Ok(io.buffer)
-}
-
-fn add_addrs(fd: &fs::File, table_name: &str, addrs: Vec<PfrAddr>)
-    -> Result<u32, Box<dyn Error>>
-{    
-    let mut io = PfIocTable::with_table(table_name);
-    io.buffer = addrs;
-    io.fire(&fd, PfIocCommand::AddAddrs)?;
-
-    Ok(io.added)
-}
-
-fn del_addrs(fd: &fs::File, table_name: &str, addrs: Vec<PfrAddr>)
-    -> Result<u32, Box<dyn Error>>
-{
-    let addrs = addrs.into_iter()
-        .map(move |x| x.into())
-        .collect();
-    
-    let mut io = PfIocTable::with_table(table_name);
-    io.buffer = addrs;
-    io.fire(&fd, PfIocCommand::DelAddrs)?;
-
-    Ok(io.deleted)
-}
-
-fn clr_addrs(fd: &fs::File, table_name: &str)
-    -> Result<u32, Box<dyn Error>>
-{
-    let mut io = PfIocTable::with_table(table_name);
-    io.fire(&fd, PfIocCommand::ClrAddrs)?;
-
-    Ok(io.deleted)
-}
 
 fn main() -> Result<(), Box<dyn Error>> {
     let fd = fs::OpenOptions::new()
@@ -63,28 +18,30 @@ fn main() -> Result<(), Box<dyn Error>> {
         PfrAddr::from_addr(IpAddr::V4("127.0.0.3".parse()?), 32),
         PfrAddr::from_addr(IpAddr::V6("::1".parse()?), 128),
     ];
-        
-    // Add addresses
-    let added = add_addrs(&fd, "my_table", addrs.clone())?;
-    println!("Added: {}", added);
-    
-    // Get addresses
-    println!("{:?}", get_addrs(&fd, "my_table")?);
 
-    // Del some of the addresses
-    addrs.pop();
-    let deleted = del_addrs(&fd, "my_table", addrs.clone())?;
-    println!("Deleted: {}", deleted);
+    let mut table = PfTable::new("my_table");
 
-    // Get addresses
-    println!("{:?}", get_addrs(&fd, "my_table")?);
+    println!("{}Adding {} address{} to {}{}", 
+        GREEN, 
+        addrs.len(), 
+        if addrs.len() == 1 { "" } else { "es" }, 
+        table.name, 
+        RESET);
+    table.add_addrs(&fd, addrs.clone())?;
+    println!("{}", table);
 
-    // Clear addresses
-    let cleared = clr_addrs(&fd, "my_table")?;
-    println!("Cleared: {}", cleared);
+    let delete = vec![addrs.pop().unwrap()];
+    println!("{}Deleting {} address{} from {}{}", 
+        GREEN, 
+        delete.len(), 
+        if delete.len() == 1 { "" } else { "es" }, 
+        table.name, 
+        RESET);
+    table.del_addrs(&fd, delete)?;
+    println!("{}", table);
 
-    // Get addresses
-    println!("{:?}", get_addrs(&fd, "my_table")?);
+    println!("{}Clearing {}{}", GREEN, table.name, RESET);
+    table.clr_addrs(&fd)?;
 
     Ok(())
 }
