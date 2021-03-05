@@ -254,12 +254,11 @@ impl RusticBinding<pfioc_table> for PfIocTable {
         self.buffer.clear();
 
         // Update self.buffer from internal pfrio_buffer
-        // We use pop() to take ownership of the value because pfr_addr is 
+        // We use remove(0) to take ownership of the value because pfr_addr is 
         // not Copy.
-        // BUG: This reverses the order of addresses!!
         let mut internal = self.pfrio_buffer.borrow_mut();
         for _ in 0..internal.len() {
-            let addr = internal.pop().unwrap();
+            let addr = internal.remove(0);
             // This could be reduced by implementing TryInto
             let mut addr2 = PfrAddr::new();
             addr2.sync_c(addr)?;
