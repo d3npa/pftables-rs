@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     table.del_addrs(&fd, vec![last])?;
 
     // Print contents of table
-    println!("{}", table);
+    println!("{:?}", table.get_addrs(&fd)?);
 
     // Clear all addresses from table
     table.clr_addrs(&fd)?;
