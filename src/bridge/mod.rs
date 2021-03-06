@@ -40,6 +40,20 @@ impl PfrAddr {
         }
     }
 
+    /// Constructs a `PfrAddr` from a host IP
+    pub fn new_host(addr: IpAddr) -> PfrAddr {
+        let subnet: u8 = match addr {
+            IpAddr::V4(_) => 32,
+            IpAddr::V6(_) => 128,
+        };
+
+        PfrAddr {
+            addr,
+            subnet,
+            ifname: String::new(),
+        }
+    }
+
     /// Constructs a `PfrAddr` with default values
     pub fn default() -> PfrAddr {
         PfrAddr {
@@ -47,6 +61,12 @@ impl PfrAddr {
             ifname: String::new(),
             subnet: 32,
         }
+    }
+}
+
+impl fmt::Display for PfrAddr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}/{}", self.addr.to_string(), self.subnet)
     }
 }
 
@@ -114,7 +134,7 @@ impl Translate<pfr_addr> for PfrAddr {
 }
 
 /// A Rust-friendly wrapper to `#[repr(C)] pfr_table`
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PfrTable {
     pub anchor: String,
     pub name: String,
