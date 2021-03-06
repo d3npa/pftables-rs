@@ -15,4 +15,4 @@ Currently, this library supports the following operations:
 - [x] Clear Addresses in table
 - [ ] Set Addresses in table
 
-See `examples/my_table` for some sample high-level usage. `src/lib.rs` contains a `PfTable` struct which works the mid-level logic, which will be useful if you want to do more than what `PfTable` provides. `src/bridge/mod.rs` contains the majority of the ffi code.
+See `examples/my_table` for some sample high-level usage. `src/lib.rs` contains a high-level interface called `PfTable` for interacting with tables. The source of `PfTable` may be a useful reference if you want to do more than what is provided. `src/bridge/mod.rs` contains the majority of the ffi code.
