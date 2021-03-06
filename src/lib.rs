@@ -47,7 +47,7 @@ impl PfTable {
     }
 
     /// Asks the kernel for a list of addresses in the table
-    pub fn get_addrs(&mut self, fd: &fs::File) -> Result<Vec<PfrAddr>> {
+    pub fn get_addrs(&self, fd: &fs::File) -> Result<Vec<PfrAddr>> {
         // Prepare an Ioctl call
         let mut io = PfIocTable::new(&self.name);
 
@@ -62,7 +62,7 @@ impl PfTable {
     }
 
     /// Asks the kernel to add a list of addresses to the table
-    pub fn add_addrs(&mut self, fd: &fs::File, addrs: Vec<PfrAddr>) 
+    pub fn add_addrs(&self, fd: &fs::File, addrs: Vec<PfrAddr>) 
         -> Result<()> 
     {
         let mut io = PfIocTable::new(&self.name);
@@ -71,7 +71,7 @@ impl PfTable {
     }
 
     /// Asks the kernel to delete a list of addresses from the table
-    pub fn del_addrs(&mut self, fd: &fs::File, addrs: Vec<PfrAddr>) 
+    pub fn del_addrs(&self, fd: &fs::File, addrs: Vec<PfrAddr>) 
         -> Result<()> 
     {
         let mut io = PfIocTable::new(&self.name);
@@ -80,7 +80,7 @@ impl PfTable {
     }
 
     /// Asks the kernel to remove every address from the table
-    pub fn clr_addrs(&mut self, fd: &fs::File) -> Result<()> {
+    pub fn clr_addrs(&self, fd: &fs::File) -> Result<()> {
         let mut io = PfIocTable::new(&self.name);
         io.fire(&fd, PfIocCommand::ClrAddrs)
     }
